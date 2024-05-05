@@ -28,20 +28,23 @@ jobs:
           GITHUB_BASE_URL="https://raw.githubusercontent.com/ellavondegurechaff/juprecresources/main"
 
           # Download Containerfile to the root of the context directory
-          curl -L "$GITHUB_BASE_URL/Containerfile" -o juprec_docker/Containerfile
+          curl -f -L "$GITHUB_BASE_URL/Containerfile" -o juprec_docker/Containerfile || { echo "Failed to download Containerfile"; exit 1; }
 
           # Download NGINX Files
-          curl -L "$GITHUB_BASE_URL/nginx/nginx-entrypoint.sh" -o juprec_docker/resources/nginx-entrypoint.sh
-          curl -L "$GITHUB_BASE_URL/nginx/nginx-template.conf" -o juprec_docker/resources/nginx-template.conf
+          curl -f -L "$GITHUB_BASE_URL/nginx/nginx-entrypoint.sh" -o juprec_docker/resources/nginx-entrypoint.sh || { echo "Failed to download nginx-entrypoint.sh"; exit 1; }
+          curl -f -L "$GITHUB_BASE_URL/nginx/nginx-template.conf" -o juprec_docker/resources/nginx-template.conf || { echo "Failed to download nginx-template.conf"; exit 1; }
 
           # Download PWD File
-          curl -L "$GITHUB_BASE_URL/pwd/pwd.yml" -o juprec_docker/pwd.yml
+          curl -f -L "$GITHUB_BASE_URL/pwd/pwd.yml" -o juprec_docker/pwd.yml || { echo "Failed to download pwd.yml"; exit 1; }
 
           # Download Apps JSON File
-          curl -L "$GITHUB_BASE_URL/apps/apps.json" -o juprec_docker/apps.json
+          curl -f -L "$GITHUB_BASE_URL/apps/apps.json" -o juprec_docker/apps.json || { echo "Failed to download apps.json"; exit 1; }
 
       - name: List Downloaded Files
         run: ls -R juprec_docker
+
+      - name: Print PWD File Content
+        run: cat juprec_docker/pwd.yml
 
       - name: Encode apps.json To Base64
         run: |
