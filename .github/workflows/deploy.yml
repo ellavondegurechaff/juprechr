@@ -63,3 +63,6 @@ jobs:
 
       - name: Start Services
         run: sudo docker compose -p juprec-dev -f juprec_docker/pwd-dev.yml up -d
+
+      - name: Check Site Logs
+        run: sudo docker logs juprec-dev-create-site-1 -f
