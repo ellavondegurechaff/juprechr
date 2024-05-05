@@ -4,7 +4,7 @@ name: Juprec Docker Deployment
 on:
   push:
     branches:
-      - main
+      - dev
 
 jobs:
   deploy:
