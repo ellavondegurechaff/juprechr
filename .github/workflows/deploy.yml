@@ -35,7 +35,7 @@ jobs:
           curl -L "$GITHUB_BASE_URL/nginx/nginx-template.conf" -o juprec_docker/resources/nginx-template.conf
 
           # Download PWD File
-          curl -L "$GITHUB_BASE_URL/pwd/pwd.yml" -o juprec_docker/pwd.yml
+          curl -L "$GITHUB_BASE_URL/docker/pwd/pwd.yml" -o juprec_docker/pwd.yml
 
           # Download Apps JSON File
           curl -L "$GITHUB_BASE_URL/apps/apps.json" -o juprec_docker/apps.json
