@@ -40,6 +40,9 @@ jobs:
           # Apps JSON File
           curl -L "$GITHUB_BASE_URL/apps/apps.json" -o juprec_docker/apps-dev.json
 
+      - name: List Files in Resources
+        run: ls -R juprec_docker/resources
+
       - name: Encode apps.json To Base64
         run: |
           export APPS_JSON_BASE64=$(base64 -w 0 juprec_docker/apps-dev.json)
@@ -60,21 +63,3 @@ jobs:
 
       - name: Start Services
         run: sudo docker compose -p juprec-dev -f juprec_docker/pwd-dev.yml up -d
-
-      - name: Check Site Logs
-        run: sudo docker logs juprec-dev-create-site-1 -f
-
-      - name: Deploy to VPS
-        env:
-          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-          VPS_HOST: ${{ secrets.VPS_HOST }}
-          VPS_USER: ${{ secrets.VPS_USER }}
-        run: |
-          mkdir -p ~/.ssh
-          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H $VPS_HOST >> ~/.ssh/known_hosts
-          scp -o StrictHostKeyChecking=no juprec_docker/pwd-dev.yml $VPS_USER@$VPS_HOST:/tmp/
-          ssh -o StrictHostKeyChecking=no $VPS_USER@$VPS_HOST << EOF
-            sudo docker compose -p juprec-dev -f /tmp/pwd-dev.yml up -d
-          EOF
