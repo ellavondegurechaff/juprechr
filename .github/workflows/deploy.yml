@@ -65,23 +65,23 @@ jobs:
             --tag juprec:latest \
             --file Containerfile .
           
+          # Stop and remove existing containers (if any)
+          docker-compose -p juprec -f pwd/pwd.yml down
+          
           # Start services
           docker-compose -p juprec -f pwd/pwd.yml up -d
           
-          # Remove site assets
-          docker exec -it juprec-backend-1 rm -rf /home/frappe/frappe-bench/sites/hr.juprecruit.cooking/public/assets
+          # Wait for the containers to start
+          sleep 30
           
-          # Check configurator logs
-          docker logs juprec-configurator-1 -f
-          
-          # Check create-site logs
-          docker logs juprec-create-site-1 -f
-          
-          # Check frontend logs
-          docker logs juprec-frontend-1 -f
+          # Check container logs
+          docker logs juprec-configurator-1
+          docker logs juprec-create-site-1
+          docker logs juprec-frontend-1
+          docker logs juprec-backend-1
           
           # Check site assets
-          docker exec -it juprec-backend-1 [ -d "/home/frappe/frappe-bench/sites/hr.juprecruit.cooking/public/assets" ] && echo "Site assets are loaded" || echo "Site assets are not loaded"
+          docker exec -it juprec-backend-1 ls /home/frappe/frappe-bench/sites/hr.juprecruit.cooking/public/assets
         EOF
         
     - name: Check and navigate browser
