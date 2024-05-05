@@ -4,7 +4,7 @@ name: Juprec Docker Deployment
 on:
   push:
     branches:
-      - dev
+      - main
 
 jobs:
   deploy:
@@ -27,25 +27,25 @@ jobs:
         run: |
           GITHUB_BASE_URL="https://raw.githubusercontent.com/ellavondegurechaff/juprecresources/main"
 
-          # Containerfile
+          # Download Containerfile to the root of the context directory
           curl -L "$GITHUB_BASE_URL/Containerfile" -o juprec_docker/Containerfile
 
-          # NGINX Files
+          # Download NGINX Files
           curl -L "$GITHUB_BASE_URL/nginx/nginx-entrypoint.sh" -o juprec_docker/resources/nginx-entrypoint.sh
           curl -L "$GITHUB_BASE_URL/nginx/nginx-template.conf" -o juprec_docker/resources/nginx-template.conf
 
-          # PWD File
-          curl -L "$GITHUB_BASE_URL/pwd/pwd.yml" -o juprec_docker/pwd-dev.yml
+          # Download PWD File
+          curl -L "$GITHUB_BASE_URL/pwd/pwd-dev.yml" -o juprec_docker/pwd-dev.yml
 
-          # Apps JSON File
-          curl -L "$GITHUB_BASE_URL/apps/apps.json" -o juprec_docker/apps-dev.json
+          # Download Apps JSON File
+          curl -L "$GITHUB_BASE_URL/apps/apps.json" -o juprec_docker/apps.json
 
-      - name: List Files in Resources
-        run: ls -R juprec_docker/resources
+      - name: List Downloaded Files
+        run: ls -R juprec_docker
 
       - name: Encode apps.json To Base64
         run: |
-          export APPS_JSON_BASE64=$(base64 -w 0 juprec_docker/apps-dev.json)
+          export APPS_JSON_BASE64=$(base64 -w 0 juprec_docker/apps.json)
           echo "APPS_JSON_BASE64=$APPS_JSON_BASE64" >> $GITHUB_ENV
 
       - name: Build Docker Image
@@ -59,7 +59,7 @@ jobs:
             --build-arg PYTHON_VERSION=3.11.6 \
             --build-arg APPS_JSON_BASE64=$APPS_JSON_BASE64 \
             --tag=juprec-dev:latest \
-            --file=juprec_docker/Containerfile .
+            --file=juprec_docker/Containerfile juprec_docker
 
       - name: Start Services
         run: sudo docker compose -p juprec-dev -f juprec_docker/pwd-dev.yml up -d
