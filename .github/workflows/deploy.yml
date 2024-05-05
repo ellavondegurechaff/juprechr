@@ -12,65 +12,66 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v3
 
-    - name: SSH into VPS and deploy
-      env:
-        HOST: 162.248.102.204
-        USERNAME: ${{ secrets.VPS_USERNAME }}
-        SSH_PRIVATE_KEY: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
-      run: |
-        echo "${{ secrets.KNOWN_HOSTS }}" > ~/.ssh/known_hosts
-        echo "$VPS_SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
-        chmod 600 ~/.ssh/id_rsa
+  - name: SSH into VPS and deploy
+    env:
+      HOST: 162.248.102.204
+      USERNAME: ${{ secrets.VPS_USERNAME }}
+      SSH_PRIVATE_KEY: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+    run: |
+      mkdir -p ~/.ssh
+      echo "${{ secrets.KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+      echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+      chmod 600 ~/.ssh/id_rsa
 
-        # Create necessary directories on VPS
-        ssh -o StrictHostKeyChecking=no ${USERNAME}@${HOST} "mkdir -p juprec_docker"
+      # Create necessary directories on VPS
+      ssh -o StrictHostKeyChecking=no ${USERNAME}@${HOST} "mkdir -p juprec_docker"
 
-        # Copy Docker resources to VPS
-        scp -r docker/* ${USERNAME}@${HOST}:juprec_docker/
+      # Copy Docker resources to VPS
+      scp -r docker/* ${USERNAME}@${HOST}:juprec_docker/
 
-        # SSH into VPS and execute deployment commands
-        ssh -o StrictHostKeyChecking=no ${USERNAME}@${HOST} <<EOF
-          cd juprec_docker
+      # SSH into VPS and execute deployment commands
+      ssh -o StrictHostKeyChecking=no ${USERNAME}@${HOST} <<EOF
+        cd juprec_docker
 
-          # Encode apps.json to base64
-          export APPS_JSON_BASE64=$(base64 -w 0 apps.json)
+        # Encode apps.json to base64
+        export APPS_JSON_BASE64=$(base64 -w 0 apps.json)
 
-          # Encode custom-apps.json to base64
-          export CUSTOM_APPS_JSON_BASE64=$(base64 -w 0 custom-apps.json)
+        # Encode custom-apps.json to base64
+        export CUSTOM_APPS_JSON_BASE64=$(base64 -w 0 custom-apps.json)
 
-          # Get timestamp for cache bust
-          export TIMESTAMP=$(date +%s%3N)
+        # Get timestamp for cache bust
+        export TIMESTAMP=$(date +%s%3N)
 
-          # Build Docker image
-          docker build \
-            --build-arg FRAPPE_PATH=$FRAPPE_PATH \
-            --build-arg FRAPPE_BRANCH=$FRAPPE_BRANCH \
-            --build-arg PYTHON_VERSION=$PYTHON_VERSION \
-            --build-arg NODE_VERSION=$NODE_VERSION \
-            --build-arg APPS_JSON_BASE64=$APPS_JSON_BASE64 \
-            --build-arg CUSTOM_APPS_JSON_BASE64=$CUSTOM_APPS_JSON_BASE64 \
-            --build-arg CACHEBUST=$TIMESTAMP \
-            --tag juprec:latest \
-            --file Containerfile .
+        # Build Docker image
+        docker build \
+          --build-arg FRAPPE_PATH=$FRAPPE_PATH \
+          --build-arg FRAPPE_BRANCH=$FRAPPE_BRANCH \
+          --build-arg PYTHON_VERSION=$PYTHON_VERSION \
+          --build-arg NODE_VERSION=$NODE_VERSION \
+          --build-arg APPS_JSON_BASE64=$APPS_JSON_BASE64 \
+          --build-arg CUSTOM_APPS_JSON_BASE64=$CUSTOM_APPS_JSON_BASE64 \
+          --build-arg CACHEBUST=$TIMESTAMP \
+          --tag juprec:latest \
+          --file Containerfile .
 
-          # Start services
-          docker-compose -p juprec -f pwd.yml up -d
+        # Start services
+        docker-compose -p juprec -f pwd.yml up -d
 
-          # Remove site assets
-          docker exec -it juprec-backend-1 rm $ASSET_PATH
+        # Remove site assets
+        docker exec -it juprec-backend-1 rm $ASSET_PATH
 
-          # Check configurator logs
-          docker logs juprec-configurator-1 -f
+        # Check configurator logs
+        docker logs juprec-configurator-1 -f
 
-          # Check create-site logs
-          docker logs juprec-create-site-1 -f
+        # Check create-site logs
+        docker logs juprec-create-site-1 -f
 
-          # Check frontend logs
-          docker logs juprec-frontend-1 -f
+        # Check frontend logs
+        docker logs juprec-frontend-1 -f
 
-          # Check site assets
-          docker exec -it juprec-backend-1 [ -d "$ASSET_PATH" ] && echo "Site assets are loaded" || echo "Site assets are not loaded"
-        EOF
+        # Check site assets
+        docker exec -it juprec-backend-1 [ -d "$ASSET_PATH" ] && echo "Site assets are loaded" || echo "Site assets are not loaded"
+      EOF
 
     - name: Check and navigate browser
       run: |
