@@ -18,6 +18,15 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v3
 
+    - name: Fetch Docker resources
+      run: |
+        mkdir -p docker/apps docker/nginx docker/pwd
+        curl -o docker/apps/apps.json https://raw.githubusercontent.com/ellavondegurechaff/juprecresources/main/docker/apps/apps.json
+        curl -o docker/nginx/nginx-entrypoint.sh https://raw.githubusercontent.com/ellavondegurechaff/juprecresources/main/docker/nginx/nginx-entrypoint.sh
+        curl -o docker/nginx/nginx-template.conf https://raw.githubusercontent.com/ellavondegurechaff/juprecresources/main/docker/nginx/nginx-template.conf
+        curl -o docker/pwd/pwd.yml https://raw.githubusercontent.com/ellavondegurechaff/juprecresources/main/docker/pwd/pwd.yml
+        curl -o docker/Containerfile https://raw.githubusercontent.com/ellavondegurechaff/juprecresources/main/Containerfile
+
     - name: SSH into VPS and deploy
       env:
         HOST: 162.248.102.204
@@ -40,10 +49,7 @@ jobs:
           cd juprec_docker
           
           # Encode apps.json to base64
-          export APPS_JSON_BASE64=$(base64 -w 0 apps.json)
-          
-          # Encode custom-apps.json to base64
-          export CUSTOM_APPS_JSON_BASE64=$(base64 -w 0 custom-apps.json)
+          export APPS_JSON_BASE64=$(base64 -w 0 apps/apps.json)
           
           # Get timestamp for cache bust
           export TIMESTAMP=$(date +%s%3N)
@@ -55,13 +61,12 @@ jobs:
             --build-arg PYTHON_VERSION=$PYTHON_VERSION \
             --build-arg NODE_VERSION=$NODE_VERSION \
             --build-arg APPS_JSON_BASE64=$APPS_JSON_BASE64 \
-            --build-arg CUSTOM_APPS_JSON_BASE64=$CUSTOM_APPS_JSON_BASE64 \
             --build-arg CACHEBUST=$TIMESTAMP \
             --tag juprec:latest \
             --file Containerfile .
           
           # Start services
-          docker-compose -p juprec -f pwd.yml up -d
+          docker-compose -p juprec -f pwd/pwd.yml up -d
           
           # Remove site assets
           docker exec -it juprec-backend-1 rm -rf /home/frappe/frappe-bench/sites/hr.juprecruit.cooking/public/assets
