@@ -1,6 +1,5 @@
 name: Juprec Docker Deployment
 
-# Trigger only on push to the main branchs
 on:
   push:
     branches:
@@ -11,58 +10,68 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Check Out Code
-        uses: actions/checkout@v2
+    - name: Check Out Code
+      uses: actions/checkout@v2
 
-      - name: Set Up Docker Buildx
-        uses: docker/setup-buildx-action@v1
+    - name: Set Up Docker Buildx
+      uses: docker/setup-buildx-action@v1
 
-      - name: Install jq for JSON Parsing
-        run: sudo apt-get update && sudo apt-get install -y jq
+    - name: Install jq for JSON Parsing
+      run: sudo apt-get update && sudo apt-get install -y jq
 
-      - name: Create Folder
-        run: mkdir -p juprec_docker/resources
+    - name: Create Folder
+      run: mkdir -p juprec_docker/resources
 
-      - name: Get Juprec Docker Resources
-        run: |
-          GITHUB_BASE_URL="https://raw.githubusercontent.com/ellavondegurechaff/juprecresources/main"
+    - name: Get Juprec Docker Resources
+      run: |
+        GITHUB_BASE_URL="https://raw.githubusercontent.com/ellavondegurechaff/juprecresources/main"
+        # Download Containerfile to the root of the context directory
+        curl -L "$GITHUB_BASE_URL/Containerfile" -o juprec_docker/Containerfile
+        # Download NGINX Files
+        curl -L "$GITHUB_BASE_URL/nginx/nginx-entrypoint.sh" -o juprec_docker/resources/nginx-entrypoint.sh
+        curl -L "$GITHUB_BASE_URL/nginx/nginx-template.conf" -o juprec_docker/resources/nginx-template.conf
+        # Download PWD File
+        curl -L "$GITHUB_BASE_URL/docker/pwd/pwd.yml" -o juprec_docker/pwd.yml
+        # Download Apps JSON File
+        curl -L "$GITHUB_BASE_URL/apps/apps.json" -o juprec_docker/apps.json
 
-          # Download Containerfile to the root of the context directory
-          curl -L "$GITHUB_BASE_URL/Containerfile" -o juprec_docker/Containerfile
+    - name: List Downloaded Files
+      run: ls -R juprec_docker
 
-          # Download NGINX Files
-          curl -L "$GITHUB_BASE_URL/nginx/nginx-entrypoint.sh" -o juprec_docker/resources/nginx-entrypoint.sh
-          curl -L "$GITHUB_BASE_URL/nginx/nginx-template.conf" -o juprec_docker/resources/nginx-template.conf
+    - name: Encode apps.json To Base64
+      run: |
+        export APPS_JSON_BASE64=$(base64 -w 0 juprec_docker/apps.json)
+        echo "APPS_JSON_BASE64=$APPS_JSON_BASE64" >> $GITHUB_ENV
 
-          # Download PWD File
-          curl -L "$GITHUB_BASE_URL/docker/pwd/pwd.yml" -o juprec_docker/pwd.yml
+    - name: Build Docker Image
+      env:
+        APPS_JSON_BASE64: ${{ env.APPS_JSON_BASE64 }}
+      run: |
+        docker build \
+          --build-arg FRAPPE_PATH=https://github.com/frappe/frappe \
+          --build-arg FRAPPE_BRANCH=version-15 \
+          --build-arg NODE_VERSION=18.18.2 \
+          --build-arg PYTHON_VERSION=3.11.6 \
+          --build-arg APPS_JSON_BASE64=$APPS_JSON_BASE64 \
+          --tag=juprec-dev:latest \
+          --file=juprec_docker/Containerfile juprec_docker
 
-          # Download Apps JSON File
-          curl -L "$GITHUB_BASE_URL/apps/apps.json" -o juprec_docker/apps.json
+    - name: Install SSH Key
+      uses: shimataro/ssh-key-action@v2
+      with:
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        known_hosts: ${{ secrets.KNOWN_HOSTS }}
 
-      - name: List Downloaded Files
-        run: ls -R juprec_docker
+    - name: Deploy to VPS
+      env:
+        VPS_HOST: ${{ secrets.VPS_HOST }}
+        VPS_USERNAME: ${{ secrets.VPS_USER }}
+      run: |
+        # Transfer necessary files to VPS
+        scp -r juprec_docker "${VPS_USER}@${VPS_HOST}:~/juprec_docker"
 
-      - name: Encode apps.json To Base64
-        run: |
-          export APPS_JSON_BASE64=$(base64 -w 0 juprec_docker/apps.json)
-          echo "APPS_JSON_BASE64=$APPS_JSON_BASE64" >> $GITHUB_ENV
-
-      - name: Build Docker Image
-        env:
-          APPS_JSON_BASE64: ${{ env.APPS_JSON_BASE64 }}
-        run: |
-          docker build \
-            --build-arg FRAPPE_PATH=https://github.com/frappe/frappe \
-            --build-arg FRAPPE_BRANCH=version-15 \
-            --build-arg NODE_VERSION=18.18.2 \
-            --build-arg PYTHON_VERSION=3.11.6 \
-            --build-arg APPS_JSON_BASE64=$APPS_JSON_BASE64 \
-            --tag=juprec-dev:latest \
-            --file=juprec_docker/Containerfile juprec_docker
-
-      - name: Start Services
-        run: sudo docker compose -p juprec-dev -f juprec_docker/pwd.yml up -d
-
-      - name: Check Site Logs
-        run: sudo docker logs juprec-dev-create-site-1 -f
+        # SSH into VPS and run Docker Compose
+        ssh "${VPS_USER}@${VPS_HOST}" '
+          cd ~/juprec_docker
+          docker compose -p juprec-dev -f pwd.yml up -d
+        '
