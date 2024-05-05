@@ -67,11 +67,18 @@ jobs:
         VPS_HOST: ${{ secrets.VPS_HOST }}
         VPS_USERNAME: ${{ secrets.VPS_USERNAME }}
       run: |
+        # Save the Docker image to a tar file
+        docker save juprec-dev:latest -o juprec-dev.tar
+
+        # Transfer the Docker image tar file to the VPS
+        scp juprec-dev.tar "${VPS_USERNAME}@${VPS_HOST}:~/juprec-dev.tar"
+
         # Transfer necessary files to VPS
         scp -r juprec_docker "${VPS_USERNAME}@${VPS_HOST}:~/juprec_docker"
 
-        # SSH into VPS and run Docker Compose
+        # SSH into VPS and load the Docker image
         ssh "${VPS_USERNAME}@${VPS_HOST}" '
+          docker load -i ~/juprec-dev.tar
           cd ~/juprec_docker
           docker compose -p juprec-dev -f pwd.yml up -d
         '
