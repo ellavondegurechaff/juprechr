@@ -1,82 +1,77 @@
-name: Juprec Docker Deployment
+name: CI/CD
 
 on:
   push:
-    branches:
-      - dev
+    branches: [dev]
 
 jobs:
-  deploy:
+  build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Check Out Code
-      uses: actions/checkout@v2
+    - name: Checkout code
+      uses: actions/checkout@v3
 
-    - name: Set Up Docker Buildx
-      uses: docker/setup-buildx-action@v1
-
-    - name: Install jq for JSON Parsing
-      run: sudo apt-get update && sudo apt-get install -y jq
-
-    - name: Create Folder
-      run: mkdir -p juprec_docker/resources
-
-    - name: Get Juprec Docker Resources
-      run: |
-        GITHUB_BASE_URL="https://raw.githubusercontent.com/ellavondegurechaff/juprecresources/main"
-        # Download Containerfile to the root of the context directory
-        curl -L "$GITHUB_BASE_URL/Containerfile" -o juprec_docker/Containerfile
-        # Download NGINX Files
-        curl -L "$GITHUB_BASE_URL/nginx/nginx-entrypoint.sh" -o juprec_docker/resources/nginx-entrypoint.sh
-        curl -L "$GITHUB_BASE_URL/nginx/nginx-template.conf" -o juprec_docker/resources/nginx-template.conf
-        # Download PWD File
-        curl -L "$GITHUB_BASE_URL/docker/pwd/pwd.yml" -o juprec_docker/pwd.yml
-        # Download Apps JSON File
-        curl -L "$GITHUB_BASE_URL/apps/apps.json" -o juprec_docker/apps.json
-
-    - name: List Downloaded Files
-      run: ls -R juprec_docker
-
-    - name: Encode apps.json To Base64
-      run: |
-        export APPS_JSON_BASE64=$(base64 -w 0 juprec_docker/apps.json)
-        echo "APPS_JSON_BASE64=$APPS_JSON_BASE64" >> $GITHUB_ENV
-
-    - name: Build Docker Image
+    - name: SSH into VPS and deploy
       env:
-        APPS_JSON_BASE64: ${{ env.APPS_JSON_BASE64 }}
+        HOST: 162.248.102.204
+        USERNAME: ${{ secrets.VPS_USERNAME }}
+        SSH_PRIVATE_KEY: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
       run: |
-        docker build \
-          --build-arg FRAPPE_PATH=https://github.com/frappe/frappe \
-          --build-arg FRAPPE_BRANCH=version-15 \
-          --build-arg NODE_VERSION=18.18.2 \
-          --build-arg PYTHON_VERSION=3.11.6 \
-          --build-arg APPS_JSON_BASE64=$APPS_JSON_BASE64 \
-          --tag=juprec-dev:latest \
-          --file=juprec_docker/Containerfile juprec_docker
+        echo "${{ secrets.KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+        echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+        chmod 600 ~/.ssh/id_rsa
 
-    - name: Install SSH Key
-      uses: shimataro/ssh-key-action@v2
-      with:
-        key: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
-        known_hosts: ${{ secrets.KNOWN_HOSTS }}
+        # Create necessary directories on VPS
+        ssh -o StrictHostKeyChecking=no ${USERNAME}@${HOST} "mkdir -p juprec_docker"
 
-    - name: Deploy to VPS
-      env:
-        VPS_HOST: ${{ secrets.VPS_HOST }}
-        VPS_USERNAME: ${{ secrets.VPS_USERNAME }}
+        # Copy Docker resources to VPS
+        scp -r docker/* ${USERNAME}@${HOST}:juprec_docker/
+
+        # SSH into VPS and execute deployment commands
+        ssh -o StrictHostKeyChecking=no ${USERNAME}@${HOST} <<EOF
+          cd juprec_docker
+
+          # Encode apps.json to base64
+          export APPS_JSON_BASE64=$(base64 -w 0 apps.json)
+
+          # Encode custom-apps.json to base64
+          export CUSTOM_APPS_JSON_BASE64=$(base64 -w 0 custom-apps.json)
+
+          # Get timestamp for cache bust
+          export TIMESTAMP=$(date +%s%3N)
+
+          # Build Docker image
+          docker build \
+            --build-arg FRAPPE_PATH=$FRAPPE_PATH \
+            --build-arg FRAPPE_BRANCH=$FRAPPE_BRANCH \
+            --build-arg PYTHON_VERSION=$PYTHON_VERSION \
+            --build-arg NODE_VERSION=$NODE_VERSION \
+            --build-arg APPS_JSON_BASE64=$APPS_JSON_BASE64 \
+            --build-arg CUSTOM_APPS_JSON_BASE64=$CUSTOM_APPS_JSON_BASE64 \
+            --build-arg CACHEBUST=$TIMESTAMP \
+            --tag juprec:latest \
+            --file Containerfile .
+
+          # Start services
+          docker-compose -p juprec -f pwd.yml up -d
+
+          # Remove site assets
+          docker exec -it juprec-backend-1 rm $ASSET_PATH
+
+          # Check configurator logs
+          docker logs juprec-configurator-1 -f
+
+          # Check create-site logs
+          docker logs juprec-create-site-1 -f
+
+          # Check frontend logs
+          docker logs juprec-frontend-1 -f
+
+          # Check site assets
+          docker exec -it juprec-backend-1 [ -d "$ASSET_PATH" ] && echo "Site assets are loaded" || echo "Site assets are not loaded"
+        EOF
+
+    - name: Check and navigate browser
       run: |
-        # Save the Docker image to a tar file
-        docker save juprec-dev:latest -o juprec-dev.tar
-        # Transfer the Docker image tar file to the VPS
-        scp juprec-dev.tar "${VPS_USERNAME}@${VPS_HOST}:~/juprec-dev.tar"
-        # Transfer necessary files to VPS
-        scp -r juprec_docker "${VPS_USERNAME}@${VPS_HOST}:~/juprec_docker"
-        # SSH into VPS, load the Docker image, stop existing containers, and start new containers
-        ssh "${VPS_USERNAME}@${VPS_HOST}" '
-          docker load -i ~/juprec-dev.tar
-          cd ~/juprec_docker
-          docker compose -p juprec-dev down
-          docker compose -p juprec-dev -f pwd.yml up -d
-        '
+        echo "Site is deployed and accessible at http://hr.juprecruit.cooking"
