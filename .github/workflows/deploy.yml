@@ -59,19 +59,19 @@ jobs:
     - name: Install SSH Key
       uses: shimataro/ssh-key-action@v2
       with:
-        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        key: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
         known_hosts: ${{ secrets.KNOWN_HOSTS }}
 
     - name: Deploy to VPS
       env:
         VPS_HOST: ${{ secrets.VPS_HOST }}
-        VPS_USERNAME: ${{ secrets.VPS_USER }}
+        VPS_USERNAME: ${{ secrets.VPS_USERNAME }}
       run: |
         # Transfer necessary files to VPS
-        scp -r juprec_docker "${VPS_USER}@${VPS_HOST}:~/juprec_docker"
+        scp -r juprec_docker "${VPS_USERNAME}@${VPS_HOST}:~/juprec_docker"
 
         # SSH into VPS and run Docker Compose
-        ssh "${VPS_USER}@${VPS_HOST}" '
+        ssh "${VPS_USERNAME}@${VPS_HOST}" '
           cd ~/juprec_docker
           docker compose -p juprec-dev -f pwd.yml up -d
         '
