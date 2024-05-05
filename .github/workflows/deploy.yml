@@ -25,9 +25,9 @@ jobs:
 
       - name: Get Juprec Docker Resources
         run: |
-          GITHUB_BASE_URL="https://raw.githubusercontent.com/ellavondegurechaff/juprecresources/main/docker"
-          
-          # ContainerFile
+          GITHUB_BASE_URL="https://raw.githubusercontent.com/ellavondegurechaff/juprecresources/main"
+
+          # Containerfile
           curl -L "$GITHUB_BASE_URL/Containerfile" -o juprec_docker/Containerfile
 
           # NGINX Files
@@ -52,8 +52,8 @@ jobs:
           docker build \
             --build-arg FRAPPE_PATH=https://github.com/frappe/frappe \
             --build-arg FRAPPE_BRANCH=version-15 \
-            --build-arg PYTHON_VERSION=3.10.12 \
-            --build-arg NODE_VERSION=18 \
+            --build-arg NODE_VERSION=18.18.2 \
+            --build-arg PYTHON_VERSION=3.11.6 \
             --build-arg APPS_JSON_BASE64=$APPS_JSON_BASE64 \
             --tag=juprec-dev:latest \
             --file=juprec_docker/Containerfile .
